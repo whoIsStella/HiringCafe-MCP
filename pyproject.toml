@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hiringcafe-mcp-local"
+version = "0.1.0"
+description = "Read-only MCP adapter for the unofficial hiringcafe-cli"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "hiringcafe-cli==0.1.5",
+  "mcp>=2,<3",
+]
+
+[project.scripts]
+hiringcafe-mcp = "hiringcafe_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hiringcafe_mcp"]
