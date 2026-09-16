@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 
 from .cli import run_json
