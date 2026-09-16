@@ -1,0 +1,1 @@
+"""HiringCafe MCP adapter."""
