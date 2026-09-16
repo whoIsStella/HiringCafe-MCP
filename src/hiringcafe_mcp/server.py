@@ -79,11 +79,12 @@ def main() -> None:
         return
     if transport == "streamable-http":
         host = os.getenv("MCP_HOST", "127.0.0.1")
-        port = int(os.getenv("PORT", os.getenv("MCP_PORT", "8000")))
+        port = int(os.getenv("PORT", os.getenv("MCP_PORT", "80")))
         mcp.run(
             transport="streamable-http",
             host=host,
             port=port,
+            streamable_http_path="/mcp",
             stateless_http=True,
             json_response=True,
         )
