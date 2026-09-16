@@ -6,7 +6,7 @@ from typing import Any
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 
-from .cli import run_json
+from .cli import HiringCafeError, run_json
 
 mcp = MCPServer(
     "HiringCafe",
@@ -19,21 +19,93 @@ mcp = MCPServer(
 READ_ONLY = ToolAnnotations(read_only_hint=True, idempotent_hint=True)
 
 
+def _diagnostic_error(exc: HiringCafeError) -> dict[str, Any]:
+    """Return a small structured error instead of an opaque MCP tool failure."""
+    return {
+        "ok": False,
+        "error": exc.message,
+        "exit_code": exc.exit_code,
+        "stderr": exc.stderr.strip()[:4000],
+    }
+
+
+def _run(args: list[str], *, timeout: int = 60) -> Any:
+    try:
+        return run_json(args, timeout=timeout)
+    except HiringCafeError as exc:
+        return _diagnostic_error(exc)
+
+
+def _compact_search(result: Any, max_jobs: int = 20) -> Any:
+    """Keep search results small; full details are available through show_job."""
+    if not isinstance(result, dict) or result.get("ok") is False:
+        return result
+
+    jobs = result.get("jobs")
+    if not isinstance(jobs, list):
+        return result
+
+    preferred = (
+        "objectID",
+        "id",
+        "title",
+        "jobTitle",
+        "company",
+        "companyName",
+        "location",
+        "locations",
+        "remote",
+        "workplaceType",
+        "salary",
+        "salaryRange",
+        "seniority",
+        "experienceLevel",
+        "datePosted",
+        "postedAt",
+        "url",
+        "jobUrl",
+        "applyUrl",
+    )
+
+    compact_jobs: list[Any] = []
+    for job in jobs[:max_jobs]:
+        if not isinstance(job, dict):
+            compact_jobs.append(job)
+            continue
+        compact = {key: job[key] for key in preferred if key in job}
+        compact_jobs.append(compact or {"objectID": job.get("objectID"), "title": job.get("title")})
+
+    metadata = {key: value for key, value in result.items() if key != "jobs"}
+    metadata.update(
+        {
+            "ok": True,
+            "jobs": compact_jobs,
+            "returned_jobs": len(compact_jobs),
+            "available_in_page": len(jobs),
+            "truncated": len(jobs) > len(compact_jobs),
+        }
+    )
+    return metadata
+
+
 @mcp.tool(
     title="Search HiringCafe jobs",
-    description="Search HiringCafe and return structured job results. Pages are capped at 5.",
+    description=(
+        "Search HiringCafe and return a compact structured result set. Pages are capped at 5; "
+        "use show_job for full details."
+    ),
     annotations=READ_ONLY,
 )
 def search_jobs(query: str, pages: int = 1, no_cache: bool = False) -> Any:
     query = query.strip()
     if not query:
-        raise ValueError("query must not be empty")
+        return {"ok": False, "error": "query must not be empty"}
     if not 1 <= pages <= 5:
-        raise ValueError("pages must be between 1 and 5")
+        return {"ok": False, "error": "pages must be between 1 and 5"}
     args = ["search", query, "--pages", str(pages), "--json"]
     if no_cache:
         args.append("--no-cache")
-    return run_json(args, timeout=90)
+    return _compact_search(_run(args, timeout=90))
 
 
 @mcp.tool(
@@ -44,8 +116,8 @@ def search_jobs(query: str, pages: int = 1, no_cache: bool = False) -> Any:
 def count_jobs(query: str) -> Any:
     query = query.strip()
     if not query:
-        raise ValueError("query must not be empty")
-    return run_json(["count", query, "--json"])
+        return {"ok": False, "error": "query must not be empty"}
+    return _run(["count", query, "--json"])
 
 
 @mcp.tool(
@@ -56,20 +128,20 @@ def count_jobs(query: str) -> Any:
 def show_job(object_id: str) -> Any:
     object_id = object_id.strip()
     if not object_id:
-        raise ValueError("object_id must not be empty")
-    return run_json(["job", "show", object_id, "--json"])
+        return {"ok": False, "error": "object_id must not be empty"}
+    return _run(["job", "show", object_id, "--json"])
 
 
 @mcp.tool(
     title="List HiringCafe saved jobs",
     description=(
         "List the authenticated user's HiringCafe saved-job board and stages. "
-        "Requires prior hiringcafe auth login/import on this machine."
+        "Requires HiringCafe credentials in the server environment."
     ),
     annotations=READ_ONLY,
 )
 def list_saved_jobs() -> Any:
-    return run_json(["saved-jobs", "list", "--json"])
+    return _run(["saved-jobs", "list", "--json"])
 
 
 def main() -> None:
