@@ -1,0 +1,5 @@
+# Add this block to ~/.codex/config.toml after replacing /ABSOLUTE/PATH.
+[mcp_servers.hiringcafe]
+command = "uv"
+args = ["run", "--project", "/ABSOLUTE/PATH/HiringCafe-MCP", "hiringcafe-mcp"]
+startup_timeout_ms = 20000
