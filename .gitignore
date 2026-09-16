@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+# hiringcafe-cli stores auth under ~/.config/hiringcafe-cli; never copy it here.
