@@ -1,44 +1,34 @@
 # HiringCafe MCP
 
-A small read-only MCP adapter for the unofficial `hiringcafe-cli` package.
+A narrow, read-only MCP interface for finding jobs through the unofficial `hiringcafe-cli`. Four tools, capped search results, and no generic shell or account-mutation endpoint.
 
-It exposes:
+**Read-only adapter.** The upstream client is pinned to
+`0.1.5`; this is not an official HiringCafe integration.
 
-- `search_jobs(query, pages=1, no_cache=false)`
-- `count_jobs(query)`
-- `show_job(object_id)`
-- `list_saved_jobs()`, which requires HiringCafe authentication
+## Interface
 
-There are no save, stage, remove, or other mutation tools.
+| Tool | Access |
+| --- | --- |
+| `search_jobs(query, pages=1, no_cache=false)` | Search, at most five pages; compact output |
+| `count_jobs(query)` | Search count |
+| `show_job(object_id)` | One job's full details |
+| `list_saved_jobs()` | Authenticated user's saved-job board, read-only |
 
-## Requirements
+The server constructs CLI argument lists without invoking a shell. CLI failures
+become structured diagnostics. There are no save, stage, remove, application,
+or arbitrary command tools.
 
-- Python 3.11+
-- `uv`
-- a HiringCafe account only for `list_saved_jobs()`
+## Run and test
 
-## Install and test
+Requires Python 3.11+ and `uv`.
 
 ```bash
 uv sync
-uv run hiringcafe search "backend software engineer" --page 0 --json
 uv run python -m unittest discover -s tests -v
+uv run hiringcafe-mcp
 ```
 
-`hiringcafe-cli` is pinned to `0.1.5`. It is an unofficial beta client, so upstream behavior can change.
-
-## Optional HiringCafe authentication
-
-```bash
-uv run hiringcafe auth login --email YOU@example.com
-uv run hiringcafe saved-jobs list --json
-```
-
-The CLI reads the password interactively and stores its refresh token under `~/.config/hiringcafe-cli/session.json` with owner-only permissions.
-
-## Codex configuration
-
-Add the server to `~/.codex/config.toml`:
+The server uses stdio by default. For Codex:
 
 ```toml
 [mcp_servers.hiringcafe]
@@ -47,38 +37,33 @@ args = ["run", "--project", "/ABSOLUTE/PATH/HiringCafe-MCP", "hiringcafe-mcp"]
 startup_timeout_ms = 20000
 ```
 
-## Streamable HTTP
+## Optional account access
+
+Only `list_saved_jobs()` requires HiringCafe authentication:
+
+```bash
+uv run hiringcafe auth login --email YOU@example.com
+uv run hiringcafe saved-jobs list --json
+```
+
+The upstream CLI owns credential storage. Keep its session files out of the
+repository and treat the server's host account as trusted.
+
+## HTTP and deployment
 
 ```bash
 MCP_TRANSPORT=streamable-http MCP_HOST=127.0.0.1 MCP_PORT=8000 \
   uv run hiringcafe-mcp
 ```
 
-Local endpoint:
+Endpoint: `http://127.0.0.1:8000/mcp`. `Dockerfile.vercel` installs the
+package and runs unit tests before producing the image; `PORT` overrides
+`MCP_PORT` when supplied.
 
-```text
-http://127.0.0.1:8000/mcp
-```
+HTTP mode does not implement authentication here. Keep it local or put it behind
+an authenticated service before exposing account-backed state. Read-only does
+not mean private.
 
-## Vercel deployment
-
-The repository includes `Dockerfile.vercel`. Vercel supplies `$PORT`, and the service binds to `0.0.0.0:$PORT` in HTTP mode.
-
-The Docker build runs the unit tests before producing the image.
-
-A remote endpoint is not private just because the MCP tools are read-only. Add authentication before connecting a public deployment to account-backed HiringCafe state.
-
-## Security boundaries
-
-- read-only MCP tools
-- no committed HiringCafe credentials or session tokens
-- search requests capped at five pages
-- no shell invocation
-- CLI subprocesses use argument lists
-- CLI failures are converted into MCP errors
-
-## Notes
-
-HiringCafe does not provide an official self-service public API for this integration. This adapter depends on the unofficial `hiringcafe-cli` package.
-
-Use returned jobs for discovery. Verify consequential details against the employer's own posting.
+Upstream availability, authentication, and response shape can change. These
+tests do not establish that HiringCafe's live service is reachable. Use results
+for discovery and check consequential details on the employer's own posting.
