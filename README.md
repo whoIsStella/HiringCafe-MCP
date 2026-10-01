@@ -36,8 +36,6 @@ uv run hiringcafe saved-jobs list --json
 
 The CLI reads the password interactively and stores its refresh token under `~/.config/hiringcafe-cli/session.json` with owner-only permissions.
 
-Do not put HiringCafe credentials in this repository, Codex configuration, Git, or prompts.
-
 ## Codex configuration
 
 Add the server to `~/.codex/config.toml`:
