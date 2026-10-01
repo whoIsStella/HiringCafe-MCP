@@ -8,13 +8,7 @@ from mcp.types import ToolAnnotations
 
 from .cli import HiringCafeError, run_json
 
-mcp = MCPServer(
-    "HiringCafe",
-    instructions=(
-        "Read-only access to HiringCafe via hiringcafe-cli. Treat returned job data as "
-        "discovery evidence and verify consequential details against the employer's posting."
-    ),
-)
+mcp = MCPServer("HiringCafe")
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, idempotent_hint=True)
 
@@ -92,7 +86,7 @@ def _compact_search(result: Any, max_jobs: int = 20) -> Any:
     title="Search HiringCafe jobs",
     description=(
         "Search HiringCafe and return a compact structured result set. Pages are capped at 5; "
-        "use show_job for full details."
+        "Full details are available through show_job."
     ),
     annotations=READ_ONLY,
 )
