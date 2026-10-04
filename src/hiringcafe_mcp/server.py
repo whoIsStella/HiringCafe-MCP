@@ -7,10 +7,12 @@ from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 
 from .cli import HiringCafeError, run_json
+from .cache import ReadCache
 
 mcp = MCPServer("HiringCafe")
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, idempotent_hint=True)
+_reads = ReadCache()
 
 
 def _diagnostic_error(exc: HiringCafeError) -> dict[str, Any]:
@@ -24,10 +26,14 @@ def _diagnostic_error(exc: HiringCafeError) -> dict[str, Any]:
 
 
 def _run(args: list[str], *, timeout: int = 60) -> Any:
-    try:
-        return run_json(args, timeout=timeout)
-    except HiringCafeError as exc:
-        return _diagnostic_error(exc)
+    def load() -> Any:
+        try:
+            return run_json(args, timeout=timeout)
+        except HiringCafeError as exc:
+            return _diagnostic_error(exc)
+    # Saved jobs can change at any time; do not retain account-backed responses.
+    bypass = "--no-cache" in args or args[0] == "saved-jobs"
+    return _reads.run(tuple(args), load, bypass=bypass)
 
 
 def _compact_search(result: Any, max_jobs: int = 20) -> Any:
@@ -144,16 +150,11 @@ def main() -> None:
         mcp.run()
         return
     if transport == "streamable-http":
+        import uvicorn
+        from .http import app
         host = os.getenv("MCP_HOST", "127.0.0.1")
         port = int(os.getenv("PORT", os.getenv("MCP_PORT", "80")))
-        mcp.run(
-            transport="streamable-http",
-            host=host,
-            port=port,
-            streamable_http_path="/mcp",
-            stateless_http=True,
-            json_response=True,
-        )
+        uvicorn.run(app, host=host, port=port)
         return
     raise ValueError("MCP_TRANSPORT must be 'stdio' or 'streamable-http'")
 

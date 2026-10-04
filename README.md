@@ -71,13 +71,41 @@ MCP_TRANSPORT=streamable-http MCP_HOST=127.0.0.1 MCP_PORT=8000 \
 ```
 
 Connect the client to `http://127.0.0.1:8000/mcp`. `PORT` overrides `MCP_PORT` if
-both are set. `Dockerfile.vercel` provides a container entry point and installs
-the Python package.
+both are set. `Dockerfile.vercel` remains available for self-hosted containers.
 
-HTTP mode has no built-in authentication. Keep the listener local or use an
-authenticated service in front of it. Anyone who can call the endpoint can use
-the server's HiringCafe account-backed tools; read-only access does not make
-saved jobs private.
+Set `MCP_ACCESS_TOKEN` to require `Authorization: Bearer <token>` on MCP requests.
+Vercel requires this variable and rejects requests if it is missing. Local HTTP
+can run without it; keep that listener private. All authenticated clients share
+the host's HiringCafe account. This is bearer authentication, not an OAuth server.
+Clients that cannot send a bearer header should use the local stdio setup.
+
+The HTTP endpoint accepts POST requests and returns JSON. GET returns 405 instead
+of opening an idle event stream. Tool discovery and the four read-only tools are
+available without a persistent session. The maximum request body is 64 KiB.
+
+## Vercel deployment
+
+`vercel.json` selects a native Python Function instead of the container preset.
+The `/mcp` route invokes `api/index.py`. `/`, `/health`, and `/robots.txt` are static
+files; health checks confirm deployment availability, not upstream HiringCafe
+availability. Unknown paths return a static 404. No cron or background jobs run.
+The function duration limit is 120 seconds, leaving room for the existing
+90-second CLI deadline. Hobby Fluid memory is controlled by Vercel, so there is
+no memory override in this configuration.
+
+Repeated public reads use a process-local cache for 60 seconds. Errors are kept
+for 15 seconds to damp repeated failures. Concurrent identical reads share one
+CLI call. At most two distinct CLI calls run per process; additional work returns
+`ok: false` with `retry_after: 5`. The cache holds at most 128 entries and 4 MiB
+of serialized values and keys. `no_cache=true` bypasses retained search results.
+Saved-job responses are never retained. Caches and concurrency limits are per
+process, not global across Vercel instances.
+
+There are no recurring paid dependencies. Remote tool calls still consume CPU
+and provisioned memory while they run, including upstream network waits. Free
+tier viability depends on request volume and upstream latency. For workloads
+that exceed the allowance, use the existing local stdio server: all four tools
+then run on the client machine with no Vercel compute usage.
 
 ## Troubleshooting
 
