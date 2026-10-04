@@ -100,6 +100,9 @@ CLI call. At most two distinct CLI calls run per process; additional work return
 of serialized values and keys. `no_cache=true` bypasses retained search results.
 Saved-job responses are never retained. Caches and concurrency limits are per
 process, not global across Vercel instances.
+On Vercel, the CLI's duplicate disk cache is disabled. If the deployment does not
+include its console script, the adapter runs the installed CLI package through
+the Python interpreter instead.
 
 There are no recurring paid dependencies. Remote tool calls still consume CPU
 and provisioned memory while they run, including upstream network waits. Free

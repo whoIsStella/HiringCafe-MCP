@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import stat
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +13,17 @@ from hiringcafe_mcp.cli import HiringCafeError, run_json
 
 
 class CliTests(unittest.TestCase):
+    def test_package_entrypoint_without_console_script(self) -> None:
+        with patch("hiringcafe_mcp.cli.shutil.which", return_value=None), patch(
+            "hiringcafe_mcp.cli.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout='{"ok":true}', stderr=""),
+        ) as run, patch.dict(os.environ, {"VERCEL": "1"}):
+            self.assertEqual(run_json(["count", "backend", "--json"]), {"ok": True})
+            command = run.call_args.args[0]
+            self.assertEqual(command[0], sys.executable)
+            self.assertEqual(command[-3:], ["count", "backend", "--json"])
+            self.assertEqual(run.call_args.kwargs["env"]["HIRINGCAFE_NO_CACHE"], "1")
+
     def _fake_cli(self, body: str) -> tuple[tempfile.TemporaryDirectory, str]:
         td = tempfile.TemporaryDirectory()
         path = Path(td.name) / "hiringcafe"
