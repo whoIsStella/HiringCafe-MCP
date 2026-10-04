@@ -102,6 +102,18 @@ class HttpTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await request())[0], 401)
             self.assertEqual((await request(token="wrong"))[0], 401)
 
+    async def test_invalid_and_oversized_requests(self):
+        with patch.dict(os.environ, {"VERCEL": "1", "MCP_ACCESS_TOKEN": "secret"}):
+            self.assertEqual((await request(body={"invalid": True}, token="secret"))[0], 400)
+            self.assertEqual((await request(body={"data": "x" * 65536}, token="secret"))[0], 413)
+
+    async def test_rewrite_target_uses_same_handler(self):
+        with patch.dict(os.environ, {"VERCEL": "1", "MCP_ACCESS_TOKEN": "secret"}):
+            status, body = await request(path="/api/index.py", token="secret", body={
+                "jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+            self.assertEqual(status, 200, body)
+            self.assertEqual(len(json.loads(body)["result"]["tools"]), 4)
+
     async def test_mcp_flows_repeated_and_concurrent(self):
         with patch.dict(os.environ, {"VERCEL": "1", "MCP_ACCESS_TOKEN": "secret"}):
             initialize = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {

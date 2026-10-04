@@ -21,7 +21,7 @@ async def app(scope, receive, send):
     path, method = scope["path"], scope["method"]
     if path in ("/", "/health"):
         response = JSONResponse({"service": "HiringCafe MCP", "status": "ok"})
-    elif path not in ("/mcp", "/mcp/"):
+    elif path not in ("/mcp", "/mcp/", "/api/index", "/api/index.py"):
         response = Response(status_code=404)
     elif method != "POST":
         # MCP permits 405 when standalone SSE is unavailable. GET previously held
