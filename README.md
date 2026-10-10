@@ -45,10 +45,12 @@ Queries and IDs have surrounding whitespace removed. CLI commands use argument
 lists without a shell. Search has a 90-second timeout; the other commands have
 a 60-second timeout.
 
-Search compaction keeps at most 20 entries when the upstream JSON has a top-level
-`jobs` list and omits large fields such as descriptions. Other response shapes
-pass through unchanged, so this is not a guaranteed response-size limit. The
-adapter depends on the CLI's pagination options and upstream JSON format.
+Search compaction keeps at most 20 entries from the CLI's `result.jobs` list
+or a legacy top-level `jobs` list and omits large fields such as descriptions.
+It preserves the CLI envelope and pagination metadata, and runs before caching.
+Other response shapes pass through unchanged, so this is not a guaranteed
+response-size limit. The adapter depends on the CLI's pagination options and
+upstream JSON format.
 
 ## Optional account access
 
@@ -111,6 +113,14 @@ that exceed the allowance, use the existing local stdio server: all four tools
 then run on the client machine with no Vercel compute usage.
 
 ## Troubleshooting
+
+For an authenticated HTTP smoke test, set `MCP_ACCESS_TOKEN` in your shell
+environment (do not put it in the command line or repository), then run
+`uv run python scripts/smoke_http.py https://YOUR-DEPLOYMENT/mcp`.
+Add `--live-query "backend engineer"` to also exercise the real upstream CLI.
+The script reports upstream diagnostics separately from transport success and
+does not print tokens or job data. `uv sync --locked` uses the checked-in
+dependency versions for repeatable validation.
 
 - **Executable not found:** run `uv sync` and launch through `uv run` so the
   pinned `hiringcafe-cli==0.1.5` executable is on the server's path.

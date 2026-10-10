@@ -28,7 +28,9 @@ def _diagnostic_error(exc: HiringCafeError) -> dict[str, Any]:
 def _run(args: list[str], *, timeout: int = 60) -> Any:
     def load() -> Any:
         try:
-            return run_json(args, timeout=timeout)
+            result = run_json(args, timeout=timeout)
+            # Retain the compact response, not a full multi-job payload.
+            return _compact_search(result) if args[0] == "search" else result
         except HiringCafeError as exc:
             return _diagnostic_error(exc)
     # Saved jobs can change at any time; do not retain account-backed responses.
@@ -40,6 +42,11 @@ def _compact_search(result: Any, max_jobs: int = 20) -> Any:
     """Keep search results small; full details are available through show_job."""
     if not isinstance(result, dict) or result.get("ok") is False:
         return result
+
+    # hiringcafe-cli 0.1.5 wraps jobs and pagination in a versioned envelope.
+    nested = result.get("result")
+    if isinstance(nested, dict) and isinstance(nested.get("jobs"), list):
+        return {**result, "result": _compact_search(nested, max_jobs)}
 
     jobs = result.get("jobs")
     if not isinstance(jobs, list):
@@ -62,6 +69,10 @@ def _compact_search(result: Any, max_jobs: int = 20) -> Any:
         "experienceLevel",
         "datePosted",
         "postedAt",
+        "publishedAt",
+        "expired",
+        "commitment",
+        "source",
         "url",
         "jobUrl",
         "applyUrl",
@@ -105,7 +116,7 @@ def search_jobs(query: str, pages: int = 1, no_cache: bool = False) -> Any:
     args = ["search", query, "--pages", str(pages), "--json"]
     if no_cache:
         args.append("--no-cache")
-    return _compact_search(_run(args, timeout=90))
+    return _run(args, timeout=90)
 
 
 @mcp.tool(

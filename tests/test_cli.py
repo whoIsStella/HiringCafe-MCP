@@ -13,6 +13,16 @@ from hiringcafe_mcp.cli import HiringCafeError, run_json
 
 
 class CliTests(unittest.TestCase):
+    def test_native_package_runs_without_console_script(self) -> None:
+        # Exercise the installed package in a real subprocess, without network
+        # access or credentials. A missing session must retain exit code 4.
+        with tempfile.TemporaryDirectory() as config, patch.dict(
+            os.environ, {"VERCEL": "1", "HIRINGCAFE_CONFIG_HOME": config},
+        ), patch("hiringcafe_mcp.cli.shutil.which", return_value=None):
+            with self.assertRaises(HiringCafeError) as error:
+                run_json(["saved-jobs", "list", "--json"], timeout=10)
+        self.assertEqual(error.exception.exit_code, 4)
+
     def test_package_entrypoint_without_console_script(self) -> None:
         with patch("hiringcafe_mcp.cli.shutil.which", return_value=None), patch(
             "hiringcafe_mcp.cli.subprocess.run",
