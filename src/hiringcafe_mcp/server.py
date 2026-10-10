@@ -7,10 +7,12 @@ from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 
 from .cli import HiringCafeError, run_json
+from .cache import ReadCache
 
 mcp = MCPServer("HiringCafe")
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, idempotent_hint=True)
+_reads = ReadCache()
 
 
 def _diagnostic_error(exc: HiringCafeError) -> dict[str, Any]:
@@ -24,16 +26,27 @@ def _diagnostic_error(exc: HiringCafeError) -> dict[str, Any]:
 
 
 def _run(args: list[str], *, timeout: int = 60) -> Any:
-    try:
-        return run_json(args, timeout=timeout)
-    except HiringCafeError as exc:
-        return _diagnostic_error(exc)
+    def load() -> Any:
+        try:
+            result = run_json(args, timeout=timeout)
+            # Retain the compact response, not a full multi-job payload.
+            return _compact_search(result) if args[0] == "search" else result
+        except HiringCafeError as exc:
+            return _diagnostic_error(exc)
+    # Saved jobs can change at any time; do not retain account-backed responses.
+    bypass = "--no-cache" in args or args[0] == "saved-jobs"
+    return _reads.run(tuple(args), load, bypass=bypass)
 
 
 def _compact_search(result: Any, max_jobs: int = 20) -> Any:
     """Keep search results small; full details are available through show_job."""
     if not isinstance(result, dict) or result.get("ok") is False:
         return result
+
+    # hiringcafe-cli 0.1.5 wraps jobs and pagination in a versioned envelope.
+    nested = result.get("result")
+    if isinstance(nested, dict) and isinstance(nested.get("jobs"), list):
+        return {**result, "result": _compact_search(nested, max_jobs)}
 
     jobs = result.get("jobs")
     if not isinstance(jobs, list):
@@ -56,6 +69,10 @@ def _compact_search(result: Any, max_jobs: int = 20) -> Any:
         "experienceLevel",
         "datePosted",
         "postedAt",
+        "publishedAt",
+        "expired",
+        "commitment",
+        "source",
         "url",
         "jobUrl",
         "applyUrl",
@@ -99,7 +116,7 @@ def search_jobs(query: str, pages: int = 1, no_cache: bool = False) -> Any:
     args = ["search", query, "--pages", str(pages), "--json"]
     if no_cache:
         args.append("--no-cache")
-    return _compact_search(_run(args, timeout=90))
+    return _run(args, timeout=90)
 
 
 @mcp.tool(
@@ -144,16 +161,11 @@ def main() -> None:
         mcp.run()
         return
     if transport == "streamable-http":
+        import uvicorn
+        from .http import app
         host = os.getenv("MCP_HOST", "127.0.0.1")
         port = int(os.getenv("PORT", os.getenv("MCP_PORT", "80")))
-        mcp.run(
-            transport="streamable-http",
-            host=host,
-            port=port,
-            streamable_http_path="/mcp",
-            stateless_http=True,
-            json_response=True,
-        )
+        uvicorn.run(app, host=host, port=port)
         return
     raise ValueError("MCP_TRANSPORT must be 'stdio' or 'streamable-http'")
 

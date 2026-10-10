@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import importlib.util
+import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from typing import Any, Sequence
 
@@ -30,7 +33,18 @@ def _binary() -> str:
 
 def run_json(args: Sequence[str], *, timeout: int = 60) -> Any:
     """Run a hiringcafe CLI command without a shell and parse JSON stdout."""
-    cmd = [_binary(), *args]
+    try:
+        cmd = [_binary(), *args]
+    except HiringCafeError:
+        # Native Python deployments may bundle packages without console scripts.
+        if importlib.util.find_spec("hiringcafe_cli") is None:
+            raise
+        cmd = [sys.executable, "-c", "from hiringcafe_cli import main; import sys; sys.exit(main())", *args]
+    env = os.environ.copy()
+    if env.get("VERCEL"):
+        # The adapter owns the bounded read cache. Avoid duplicate filesystem
+        # caching and writes to a read-only home directory in the function.
+        env["HIRINGCAFE_NO_CACHE"] = "1"
     try:
         proc = subprocess.run(
             cmd,
@@ -38,6 +52,7 @@ def run_json(args: Sequence[str], *, timeout: int = 60) -> Any:
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
         )
     except subprocess.TimeoutExpired as exc:
         raise HiringCafeError("HiringCafe command timed out") from exc
